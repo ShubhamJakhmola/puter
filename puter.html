@@ -1,391 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Puter AI Studio — OpenAI Image &amp; Chat</title>
-<script src="https://js.puter.com/v2/"></script>
-<style>
-  :root{
-    --bg:#0b0d10;
-    --bg-raised:#111418;
-    --line:#22262c;
-    --text:#e7e9ec;
-    --text-dim:#8b93a1;
-    --accent:#5eead4;
-    --accent-dim:#1f3d38;
-    --warn:#f2b84b;
-    --mono: "JetBrains Mono","SFMono-Regular",Consolas,monospace;
-    --sans: "Inter","Segoe UI",system-ui,sans-serif;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:
-      radial-gradient(1200px 600px at 80% -10%, rgba(94,234,212,0.06), transparent 60%),
-      var(--bg);
-    color:var(--text);
-    font-family:var(--sans);
-    line-height:1.5;
-    min-height:100vh;
-  }
-  .wrap{max-width:920px;margin:0 auto;padding:56px 24px 80px;}
-
-  /* header */
-  header{margin-bottom:48px;}
-  .tag{
-    display:inline-flex;align-items:center;gap:8px;
-    font-family:var(--mono);font-size:12px;letter-spacing:.06em;
-    color:var(--accent);background:var(--accent-dim);
-    border:1px solid rgba(94,234,212,0.25);
-    padding:4px 10px;border-radius:100px;margin-bottom:20px;
-  }
-  .tag::before{content:"●";font-size:9px;}
-  h1{
-    font-size:clamp(32px,5vw,46px);
-    line-height:1.08;
-    margin:0 0 14px;
-    letter-spacing:-0.02em;
-    font-weight:650;
-  }
-  h1 .accent{color:var(--accent);}
-  .sub{
-    color:var(--text-dim);
-    font-size:16px;
-    max-width:56ch;
-    margin:0;
-  }
-  .sub code{
-    font-family:var(--mono);font-size:13.5px;
-    background:var(--bg-raised);border:1px solid var(--line);
-    padding:1px 6px;border-radius:5px;color:var(--text);
-  }
-
-  /* tabs */
-  .tabs{
-    display:flex;gap:4px;margin:36px 0 0;
-    border-bottom:1px solid var(--line);
-  }
-  .tab-btn{
-    font-family:var(--mono);font-size:13px;
-    background:none;border:none;color:var(--text-dim);
-    padding:12px 4px;margin-right:24px;cursor:pointer;
-    border-bottom:2px solid transparent;
-    transition:color .15s ease, border-color .15s ease;
-  }
-  .tab-btn:hover{color:var(--text);}
-  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
-
-  .panel{display:none;padding-top:32px;}
-  .panel.active{display:block;}
-
-  /* card / form */
-  .card{
-    background:var(--bg-raised);
-    border:1px solid var(--line);
-    border-radius:14px;
-    padding:24px;
-  }
-  label{
-    display:block;font-family:var(--mono);font-size:11.5px;
-    text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);
-    margin:0 0 8px;
-  }
-  textarea, select, input[type="text"]{
-    width:100%;
-    background:#0e1114;
-    border:1px solid var(--line);
-    border-radius:8px;
-    color:var(--text);
-    font-family:var(--sans);
-    font-size:14.5px;
-    padding:12px 14px;
-    resize:vertical;
-    outline:none;
-    transition:border-color .15s ease;
-  }
-  textarea:focus, select:focus, input[type="text"]:focus{border-color:var(--accent);}
-  textarea{min-height:96px;}
-  .row{display:flex;gap:16px;margin-top:18px;flex-wrap:wrap;}
-  .row .field{flex:1;min-width:150px;}
-  .field{margin-top:0;}
-  .field + .field{margin-top:18px;}
-
-  .btn{
-    font-family:var(--mono);font-size:13px;letter-spacing:.02em;
-    background:var(--accent);color:#06110f;border:none;
-    padding:12px 20px;border-radius:8px;cursor:pointer;
-    font-weight:600;
-    transition:transform .1s ease, filter .15s ease;
-  }
-  .btn:hover{filter:brightness(1.08);}
-  .btn:active{transform:translateY(1px);}
-  .btn:disabled{opacity:.5;cursor:not-allowed;}
-  .btn-row{margin-top:22px;display:flex;align-items:center;gap:14px;}
-
-  .status{font-family:var(--mono);font-size:12.5px;color:var(--text-dim);}
-  .status.err{color:#f2708a;}
-
-  /* output */
-  .output{margin-top:26px;}
-  .img-frame{
-    border:1px solid var(--line);border-radius:12px;
-    overflow:hidden;background:#000;
-    display:flex;align-items:center;justify-content:center;
-    min-height:120px;
-  }
-  .img-frame img{display:block;width:100%;height:auto;}
-  .placeholder{
-    color:var(--text-dim);font-family:var(--mono);font-size:12.5px;
-    padding:40px 20px;text-align:center;
-  }
-  .dl-link{
-    display:inline-block;margin-top:12px;font-family:var(--mono);
-    font-size:12.5px;color:var(--accent);text-decoration:none;
-    border-bottom:1px dashed rgba(94,234,212,.5);
-  }
-
-  .chat-log{
-    margin-top:20px;
-    border:1px solid var(--line);border-radius:12px;
-    background:#0e1114;
-    padding:18px;
-    min-height:120px;
-    max-height:420px;
-    overflow-y:auto;
-    font-size:14.5px;
-    white-space:pre-wrap;
-  }
-  .chat-log:empty::before{
-    content:"Responses will appear here.";
-    color:var(--text-dim);font-family:var(--mono);font-size:12.5px;
-  }
-  .msg-user{color:var(--accent);font-family:var(--mono);font-size:12px;
-    text-transform:uppercase;letter-spacing:.06em;margin-top:14px;display:block;}
-  .msg-user:first-child{margin-top:0;}
-  .msg-ai{color:var(--text);margin:6px 0 0;display:block;}
-
-  footer{
-    margin-top:64px;padding-top:24px;border-top:1px solid var(--line);
-    font-family:var(--mono);font-size:12px;color:var(--text-dim);
-    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
-  }
-  footer a{color:var(--text-dim);}
-  footer a:hover{color:var(--accent);}
-
-  @media (prefers-reduced-motion: reduce){
-    *{transition:none !important;}
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Puter Image Bridge — Make.com Automation</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://js.puter.com/v2/"></script>
 </head>
 <body>
-<div class="wrap">
+  <div id="app" class="wrap">
+    <header class="manual-only">
+      <span class="tag">Puter.js · Make.com Bridge</span>
+      <h1>AI Image <span class="accent">Automation Bridge</span></h1>
+      <p class="sub">
+        Trigger via URL: <code>?prompt=…&amp;webhook=…&amp;count=4</code>.
+        Uses <code>puter.ai.txt2img()</code> — no backend, no API key.
+      </p>
+    </header>
 
-  <header>
-    <span class="tag">Puter.js · no backend, no API key</span>
-    <h1>Test OpenAI image &amp; chat<br>through <span class="accent">Puter</span>.</h1>
-    <p class="sub">
-      A minimal front end wired to <code>puter.ai.txt2img()</code> and <code>puter.ai.chat()</code>.
-      Sign-in and billing are handled by Puter's user-pays model — no server, no key in this page.
-    </p>
-  </header>
+    <div id="headless-panel" class="headless-ui" hidden>
+      <div class="spinner" aria-hidden="true"></div>
+      <p id="headless-status">Initializing…</p>
+    </div>
 
-  <nav class="tabs">
-    <button class="tab-btn active" data-tab="image">01 · image generation</button>
-    <button class="tab-btn" data-tab="chat">02 · chat</button>
-  </nav>
-
-  <!-- IMAGE PANEL -->
-  <section class="panel active" id="panel-image">
-    <div class="card">
-      <label for="img-prompt">Prompt</label>
-      <textarea id="img-prompt" placeholder="A weathered lighthouse at dusk, cinematic lighting, wide shot"></textarea>
-
-      <div class="row">
-        <div class="field">
-          <label for="img-model">Model</label>
-          <select id="img-model">
-            <option value="gpt-image-1-mini" selected>gpt-image-1-mini</option>
-            <option value="gpt-image-1">gpt-image-1</option>
-            <option value="gpt-image-1.5">gpt-image-1.5</option>
-            <option value="gpt-image-2">gpt-image-2</option>
-          </select>
+    <div id="preview-panel" class="manual-only">
+      <div class="card">
+        <h2>Manual Test</h2>
+        <label for="manual-prompt">Prompt</label>
+        <textarea id="manual-prompt" placeholder="A red rose on marble, studio lighting"></textarea>
+        <div class="row">
+          <div class="field">
+            <label for="manual-model">Model</label>
+            <select id="manual-model">
+              <option value="gpt-image-1-mini">gpt-image-1-mini</option>
+              <option value="gpt-image-1">gpt-image-1</option>
+              <option value="gpt-image-1.5">gpt-image-1.5</option>
+              <option value="gpt-image-2">gpt-image-2</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="manual-quality">Quality</label>
+            <select id="manual-quality">
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="manual-count">Count</label>
+            <input type="number" id="manual-count" min="1" max="10" value="1">
+          </div>
+          <div class="field">
+            <label for="manual-test">Test mode</label>
+            <select id="manual-test">
+              <option value="false">live</option>
+              <option value="true">test (free sample)</option>
+            </select>
+          </div>
         </div>
-        <div class="field">
-          <label for="img-quality">Quality</label>
-          <select id="img-quality">
-            <option value="low" selected>low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-          </select>
+        <div class="btn-row">
+          <button class="btn" id="manual-generate">Generate</button>
+          <span class="status-pill" id="manual-status">Idle</span>
         </div>
-        <div class="field">
-          <label for="img-test">Mode</label>
-          <select id="img-test">
-            <option value="live" selected>live (uses credits)</option>
-            <option value="test">test (free sample)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="btn-row">
-        <button class="btn" id="img-generate">Generate image</button>
-        <span class="status" id="img-status"></span>
-      </div>
-
-      <div class="output">
-        <div class="img-frame" id="img-frame">
-          <div class="placeholder">No image generated yet.</div>
-        </div>
-        <a class="dl-link" id="img-download" style="display:none;" download="puter-generated-image.png">↓ Download image</a>
       </div>
     </div>
-  </section>
 
-  <!-- CHAT PANEL -->
-  <section class="panel" id="panel-chat">
-    <div class="card">
-      <label for="chat-model">Model</label>
-      <select id="chat-model">
-        <option value="gpt-5-nano" selected>gpt-5-nano</option>
-        <option value="gpt-5.4-nano">gpt-5.4-nano</option>
-        <option value="gpt-5.5">gpt-5.5</option>
-      </select>
-
-      <div class="field" style="margin-top:18px;">
-        <label for="chat-prompt">Message</label>
-        <textarea id="chat-prompt" placeholder="Ask anything…"></textarea>
+    <div id="result-panel" hidden>
+      <div class="card">
+        <h2>Result</h2>
+        <div class="btn-row">
+          <span class="status-pill" id="result-status">—</span>
+          <button class="btn btn-ghost manual-only" id="copy-json">Copy JSON</button>
+        </div>
+        <div class="meta-grid" id="meta-grid"></div>
+        <div id="error-box" hidden></div>
+        <div class="gallery" id="gallery"></div>
+        <div class="json-box manual-only" id="json-output" hidden></div>
       </div>
-
-      <div class="btn-row">
-        <button class="btn" id="chat-send">Send</button>
-        <span class="status" id="chat-status"></span>
-      </div>
-
-      <div class="chat-log" id="chat-log"></div>
     </div>
-  </section>
 
-  <footer>
-    <span>Built with Puter.js — no server, keys stay client-side.</span>
-    <a href="https://developer.puter.com" target="_blank" rel="noopener">Powered by Puter →</a>
-  </footer>
+    <div class="card manual-only" id="history-panel">
+      <h2>Recent Generations</h2>
+      <div class="history-list" id="history-list">
+        <p class="sub" style="margin:0;">No history yet.</p>
+      </div>
+    </div>
 
-</div>
+    <footer class="manual-only">
+      <span>Puter Image Bridge · production automation</span>
+      <a href="https://developer.puter.com" target="_blank" rel="noopener">Powered by Puter →</a>
+    </footer>
+  </div>
 
-<script>
-  // ---- tabs ----
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
-    });
-  });
-
-  // ---- image generation ----
-  const imgPromptEl = document.getElementById("img-prompt");
-  const imgModelEl = document.getElementById("img-model");
-  const imgQualityEl = document.getElementById("img-quality");
-  const imgTestEl = document.getElementById("img-test");
-  const imgGenerateBtn = document.getElementById("img-generate");
-  const imgStatusEl = document.getElementById("img-status");
-  const imgFrameEl = document.getElementById("img-frame");
-  const imgDownloadEl = document.getElementById("img-download");
-
-  imgGenerateBtn.addEventListener("click", async () => {
-    const prompt = imgPromptEl.value.trim();
-    if (!prompt) {
-      imgStatusEl.textContent = "Enter a prompt first.";
-      imgStatusEl.classList.add("err");
-      return;
-    }
-    imgStatusEl.classList.remove("err");
-    imgStatusEl.textContent = "Generating…";
-    imgGenerateBtn.disabled = true;
-    imgDownloadEl.style.display = "none";
-
-    try {
-      const testMode = imgTestEl.value === "test";
-      const image = await puter.ai.txt2img(prompt, {
-        provider: "openai-image-generation",
-        model: imgModelEl.value,
-        quality: imgQualityEl.value,
-        test_mode: testMode
-      });
-
-      imgFrameEl.innerHTML = "";
-      image.style.width = "100%";
-      image.style.display = "block";
-      imgFrameEl.appendChild(image);
-
-      imgDownloadEl.href = image.src;
-      imgDownloadEl.style.display = "inline-block";
-      imgStatusEl.textContent = "Done.";
-    } catch (err) {
-      imgStatusEl.textContent = "Error: " + (err?.message || err);
-      imgStatusEl.classList.add("err");
-    } finally {
-      imgGenerateBtn.disabled = false;
-    }
-  });
-
-  // ---- chat ----
-  const chatPromptEl = document.getElementById("chat-prompt");
-  const chatModelEl = document.getElementById("chat-model");
-  const chatSendBtn = document.getElementById("chat-send");
-  const chatStatusEl = document.getElementById("chat-status");
-  const chatLogEl = document.getElementById("chat-log");
-
-  chatSendBtn.addEventListener("click", async () => {
-    const prompt = chatPromptEl.value.trim();
-    if (!prompt) {
-      chatStatusEl.textContent = "Type a message first.";
-      chatStatusEl.classList.add("err");
-      return;
-    }
-    chatStatusEl.classList.remove("err");
-    chatStatusEl.textContent = "Thinking…";
-    chatSendBtn.disabled = true;
-
-    const userLine = document.createElement("span");
-    userLine.className = "msg-user";
-    userLine.textContent = "you";
-    const userText = document.createElement("span");
-    userText.className = "msg-ai";
-    userText.textContent = prompt;
-
-    const aiLabel = document.createElement("span");
-    aiLabel.className = "msg-user";
-    aiLabel.textContent = chatModelEl.value;
-    const aiText = document.createElement("span");
-    aiText.className = "msg-ai";
-
-    chatLogEl.appendChild(userLine);
-    chatLogEl.appendChild(userText);
-    chatLogEl.appendChild(aiLabel);
-    chatLogEl.appendChild(aiText);
-
-    try {
-      const response = await puter.ai.chat(prompt, { model: chatModelEl.value, stream: true });
-      for await (const part of response) {
-        if (part?.text) {
-          aiText.textContent += part.text;
-          chatLogEl.scrollTop = chatLogEl.scrollHeight;
-        }
-      }
-      chatStatusEl.textContent = "Done.";
-    } catch (err) {
-      aiText.textContent = "Error: " + (err?.message || err);
-      chatStatusEl.textContent = "Error.";
-      chatStatusEl.classList.add("err");
-    } finally {
-      chatSendBtn.disabled = false;
-      chatPromptEl.value = "";
-      chatLogEl.scrollTop = chatLogEl.scrollHeight;
-    }
-  });
-</script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
