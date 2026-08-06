@@ -1,10 +1,9 @@
 /** @file Main request pipeline orchestration. */
 
-import { DEFAULTS } from "./config.js";
-import { session, createRequestId } from "./session.js";
-import { log, setProgress } from "./logger.js";
-import { sanitizePrompt, validateConfig } from "./params.js";
-import { createResponse } from "./response.js";
+import { session, resetSession, checkJobDuplicate, registerJobId } from "./session.js";
+import { log, setProgress, endStage } from "./logger.js";
+import { validateRequest } from "./params.js";
+import { createResponse, createFailureResponse } from "./response.js";
 import { withTimeout } from "./utils.js";
 import { waitForPuter, generateImages } from "./generation.js";
 import { sendWebhook } from "./webhook.js";
@@ -16,111 +15,141 @@ import { saveHistory } from "./history.js";
  * @returns {Promise<object>}
  */
 export async function runPipeline(rawConfig) {
-  session.requestId = createRequestId();
+  resetSession(rawConfig.job_id || null);
   setProgress("Initializing");
 
-  const started = performance.now();
-  let response = createResponse({ success: false });
+  let webhookTimeMs = 0;
 
   try {
-    setProgress("Reading parameters");
+    setProgress("Validating");
 
-    const sanitized = sanitizePrompt(rawConfig.prompt);
-    if (!sanitized.valid) {
-      response = createResponse({
-        success: false,
-        errors: [{ code: "EMPTY_PROMPT", message: sanitized.error }]
-      });
+    const jobCheck = checkJobDuplicate(rawConfig.job_id);
+    if (jobCheck.duplicate) {
+      const response = createFailureResponse([
+        {
+          code: "DUPLICATE_JOB",
+          message: `job_id "${jobCheck.job_id}" was already processed in this session.`
+        }
+      ]);
       setProgress("Failed");
       return response;
     }
 
-    const config = { ...rawConfig, prompt: sanitized.prompt };
-    const validation = validateConfig(config);
-    config.warnings = validation.warnings;
+    const validation = validateRequest({
+      ...rawConfig,
+      rawCount: rawConfig.rawCount ?? rawConfig.count
+    });
 
     if (!validation.valid) {
-      response = createResponse({
-        success: false,
-        prompt: config.prompt,
-        provider: config.provider,
-        model: config.model,
-        quality: config.quality,
-        test_mode: config.test_mode,
-        errors: validation.errors.map((m) => ({ code: "VALIDATION", message: m })),
-        warnings: validation.warnings
-      });
+      const response = createFailureResponse(validation.errors);
       setProgress("Failed");
       return response;
     }
 
-    setProgress("Authenticating");
-    await waitForPuter(15000);
+    const config = { ...validation.config, warnings: validation.warnings };
 
+    setProgress("Authenticating");
+    const authStart = performance.now();
+    await waitForPuter(15000);
+    session.stageTimings["Authenticating"] = Math.round(performance.now() - authStart);
+    log("INFO", "Puter SDK ready", { duration_ms: session.stageTimings["Authenticating"] });
+
+    const genStart = performance.now();
     const genResult = await withTimeout(
       generateImages(config),
       config.timeout,
       "Image generation"
     );
+    const generationTimeMs = Math.round(performance.now() - genStart);
 
     const success = genResult.images.length > 0;
-    response = createResponse({
+    const totalTimeMs = Math.round(performance.now() - (session.pipelineStart || genStart));
+
+    let response = createResponse({
       success,
       prompt: config.prompt,
-      provider: config.provider,
       model: config.model,
       quality: config.quality,
+      provider: config.provider,
       test_mode: config.test_mode,
-      generation_time: Math.round(performance.now() - started),
-      image_count: genResult.images.length,
       images: genResult.images,
-      errors: genResult.errors,
-      warnings: genResult.warnings
+      warnings: genResult.warnings,
+      errors: genResult.errors.map((e) => ({
+        code: "GENERATION_FAILURE",
+        message: e.message || String(e)
+      })),
+      metrics: {
+        generation_time_ms: generationTimeMs,
+        webhook_time_ms: 0,
+        total_time_ms: totalTimeMs
+      }
     });
 
     if (config.webhook) {
-      setProgress("Uploading");
+      setProgress("Sending Webhook");
       const webhookResult = await sendWebhook(config.webhook, response);
-      if (!webhookResult.delivered) {
-        response.warnings = [
-          ...(response.warnings || []),
-          `Webhook delivery failed after ${webhookResult.attempts} attempts.`
-        ];
-        response.webhook_error = webhookResult.error;
-        response.webhook_delivered = false;
-      } else {
-        response.webhook_delivered = true;
-        response.webhook_attempts = webhookResult.attempts;
-      }
+      webhookTimeMs = webhookResult.duration_ms || 0;
+
+      response = createResponse({
+        ...response,
+        metrics: {
+          ...response.metrics,
+          webhook_time_ms: webhookTimeMs,
+          total_time_ms: Math.round(performance.now() - (session.pipelineStart || genStart))
+        },
+        webhook_delivered: webhookResult.delivered,
+        webhook_attempts: webhookResult.attempts,
+        webhook_error: webhookResult.error || undefined,
+        warnings: webhookResult.delivered
+          ? response.warnings
+          : [
+              ...(response.warnings || []),
+              `Webhook delivery failed after ${webhookResult.attempts} attempts.`
+            ]
+      });
     }
 
     setProgress(success ? "Completed" : "Failed");
-    if (success) saveHistory(response);
+    if (success) {
+      registerJobId(config.job_id);
+      saveHistory(response);
+    }
+
     return response;
   } catch (err) {
     const isTimeout = String(err.message).toLowerCase().includes("timed out");
     log("ERROR", `Pipeline failed: ${err.message}`);
 
-    response = createResponse({
-      success: false,
-      prompt: rawConfig.prompt || "",
-      provider: rawConfig.provider || DEFAULTS.provider,
-      model: rawConfig.model || DEFAULTS.model,
-      quality: rawConfig.quality || DEFAULTS.quality,
-      test_mode: rawConfig.test_mode ?? DEFAULTS.test_mode,
-      generation_time: Math.round(performance.now() - started),
-      image_count: 0,
-      images: [],
-      errors: [{
+    if (session.currentStage) endStage(session.currentStage);
+
+    const totalTimeMs = Math.round(performance.now() - (session.pipelineStart || performance.now()));
+
+    let response = createFailureResponse(
+      [{
         code: isTimeout ? "TIMEOUT" : "GENERATION_FAILURE",
         message: err.message
       }],
-      warnings: rawConfig.warnings || []
-    });
+      { job_id: session.jobId }
+    );
+
+    // Attach metrics for debugging even on failure when partial work occurred
+    response = {
+      ...response,
+      metrics: {
+        generation_time_ms: session.stageTimings["Generating Image"] || 0,
+        webhook_time_ms: webhookTimeMs,
+        total_time_ms: totalTimeMs,
+        stages: { ...session.stageTimings }
+      }
+    };
 
     if (rawConfig.webhook) {
       try {
-        await sendWebhook(rawConfig.webhook, response);
+        setProgress("Sending Webhook");
+        const webhookResult = await sendWebhook(rawConfig.webhook, response);
+        webhookTimeMs = webhookResult.duration_ms || 0;
+        response.metrics.webhook_time_ms = webhookTimeMs;
+        response.metrics.total_time_ms = Math.round(performance.now() - (session.pipelineStart || performance.now()));
       } catch (whErr) {
         log("WARNING", "Failed to send error webhook", { error: whErr.message });
       }

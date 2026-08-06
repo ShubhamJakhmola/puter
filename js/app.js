@@ -1,6 +1,6 @@
 /**
  * @file Puter Image Automation Bridge — application entry point.
- * @version 2.0.0
+ * @version 2.1.0
  */
 
 import { DEFAULTS } from "./config.js";
@@ -8,7 +8,7 @@ import { session } from "./session.js";
 import { initDom, dom } from "./dom.js";
 import { log, setProgress } from "./logger.js";
 import { parseParameters } from "./params.js";
-import { createResponse } from "./response.js";
+import { createFailureResponse } from "./response.js";
 import { parseIntBounded } from "./utils.js";
 import { runPipeline } from "./pipeline.js";
 import { renderHistory } from "./history.js";
@@ -53,7 +53,9 @@ function bindEvents() {
       provider: DEFAULTS.provider,
       test_mode: dom.manualTest.value === "true",
       count: parseIntBounded(dom.manualCount.value, 1, 1, DEFAULTS.maxCount),
+      rawCount: dom.manualCount.value,
       webhook: "",
+      job_id: "",
       preview: true,
       timeout: DEFAULTS.timeout
     };
@@ -69,6 +71,10 @@ function bindEvents() {
       dom.manualStatus.className = "status-pill " + (response.success ? "done" : "failed");
     } catch (err) {
       log("ERROR", "Manual run failed", { error: err.message });
+      finalize(
+        createFailureResponse([{ code: "MANUAL_RUN", message: err.message }]),
+        true
+      );
       dom.manualStatus.textContent = "Failed";
       dom.manualStatus.className = "status-pill failed";
     } finally {
@@ -90,15 +96,12 @@ async function bootstrap() {
   renderHistory();
 
   if (params.autoRun) {
-    log("INFO", "Auto-run triggered from URL parameters");
+    log("INFO", "Auto-run triggered from URL parameters", { job_id: params.job_id || null });
     try {
       finalize(await runPipeline(params), params.preview);
     } catch (err) {
       finalize(
-        createResponse({
-          success: false,
-          errors: [{ code: "BOOTSTRAP", message: err.message }]
-        }),
+        createFailureResponse([{ code: "BOOTSTRAP", message: err.message }]),
         params.preview
       );
     }

@@ -17,8 +17,9 @@ export function saveHistory(response) {
     const list = raw ? JSON.parse(raw) : [];
     list.unshift({
       request_id: response.request_id,
+      job_id: response.job_id || null,
       prompt: response.prompt,
-      image_count: response.image_count,
+      image_count: response.images?.length || 0,
       thumbnail: response.images[0]?.url || "",
       timestamp: response.timestamp
     });

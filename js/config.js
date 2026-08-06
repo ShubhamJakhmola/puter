@@ -13,11 +13,11 @@ export const OPENAI_QUALITIES = ["low", "medium", "high", "auto"];
 
 export const PROGRESS_STATES = [
   "Initializing",
-  "Reading parameters",
+  "Validating",
   "Authenticating",
-  "Generating",
-  "Uploading",
-  "Webhook",
+  "Generating Image",
+  "Processing Images",
+  "Sending Webhook",
   "Completed",
   "Failed"
 ];
@@ -30,6 +30,7 @@ export const DEFAULTS = {
   count: 1,
   preview: true,
   timeout: 120000,
+  minPromptLength: 15,
   maxPromptLength: 4000,
   maxCount: 10,
   historyLimit: 20,
@@ -38,4 +39,4 @@ export const DEFAULTS = {
 };
 
 export const HISTORY_KEY = "puter_bridge_history_v1";
-export const BRIDGE_VERSION = "2.0.0";
+export const BRIDGE_VERSION = "2.1.0";

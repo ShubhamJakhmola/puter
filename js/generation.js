@@ -89,7 +89,7 @@ export async function generateSingleImage(prompt, config, index) {
 
       if (!retryable) break;
       const delay = backoffMs(attempt);
-      log("WARNING", `Retrying in ${delay}ms…`);
+      log("WARNING", `Retrying image generation in ${delay}ms`, { next_attempt: attempt + 2 });
       await sleep(delay);
     }
   }
@@ -103,7 +103,9 @@ export async function generateSingleImage(prompt, config, index) {
  * @returns {Promise<{ images: object[], errors: object[], warnings: string[] }>}
  */
 export async function generateImages(config) {
-  setProgress("Generating");
+  setProgress("Generating Image");
+  const genStart = performance.now();
+
   /** @type {object[]} */
   const images = [];
   /** @type {object[]} */
@@ -116,11 +118,24 @@ export async function generateImages(config) {
     } catch (err) {
       errors.push({
         index: i,
+        code: "GENERATION_FAILURE",
         message: err?.message || String(err),
         retryable: isRetryableError(err)
       });
     }
   }
+
+  setProgress("Processing Images");
+  const processingStart = performance.now();
+
+  log("INFO", "Processing generated images", {
+    generated: images.length,
+    failed: errors.length,
+    duration_ms: Math.round(performance.now() - genStart)
+  });
+
+  const processingMs = Math.round(performance.now() - processingStart);
+  log("INFO", "Image processing complete", { duration_ms: processingMs });
 
   return { images, errors, warnings };
 }

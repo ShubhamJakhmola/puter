@@ -33,15 +33,18 @@ export function renderPreview(response) {
   dom.resultStatus.className = "status-pill " + (response.success ? "done" : "failed");
 
   dom.metaGrid.innerHTML = "";
+
+  const metrics = response.metrics || {};
   const metaFields = [
     ["Request ID", response.request_id],
-    ["Prompt", response.prompt],
-    ["Provider", response.provider],
-    ["Model", response.model],
-    ["Quality", response.quality],
-    ["Test mode", String(response.test_mode)],
-    ["Images", String(response.image_count)],
-    ["Duration", response.generation_time + " ms"],
+    ["Job ID", response.job_id || "—"],
+    ["Prompt", response.prompt || "—"],
+    ["Model", response.model || "—"],
+    ["Quality", response.quality || "—"],
+    ["Images", String(response.images?.length ?? 0)],
+    ["Generation", metrics.generation_time_ms != null ? metrics.generation_time_ms + " ms" : "—"],
+    ["Webhook", metrics.webhook_time_ms != null ? metrics.webhook_time_ms + " ms" : "—"],
+    ["Total", metrics.total_time_ms != null ? metrics.total_time_ms + " ms" : "—"],
     ["Timestamp", response.timestamp]
   ];
 
@@ -58,13 +61,13 @@ export function renderPreview(response) {
 
   const allErrors = [...(response.errors || [])];
   if (response.webhook_error) {
-    allErrors.push({ message: "Webhook: " + response.webhook_error });
+    allErrors.push({ code: "WEBHOOK", message: response.webhook_error });
   }
   if (allErrors.length) {
     dom.errorBox.hidden = false;
     dom.errorBox.className = "alert err";
     dom.errorBox.textContent = allErrors
-      .map((e) => (typeof e === "string" ? e : e.message))
+      .map((e) => (typeof e === "string" ? e : `[${e.code || "ERROR"}] ${e.message}`))
       .join(" · ");
   }
   if (response.warnings?.length) {
